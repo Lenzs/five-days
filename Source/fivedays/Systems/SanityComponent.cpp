@@ -17,11 +17,11 @@ void USanityComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	ApplyPassiveDecay(DeltaTime);
 }
 
-void USanityComponent::ModifySanity(float Delta)
+void USanityComponent::ModifySanity(float Amount)
 {
 	float OldSanity = CurrentSanity;
 
-	CurrentSanity = FMath::Clamp(CurrentSanity + Delta, USanityComponent::MinSanity, USanityComponent::MaxSanity);
+	CurrentSanity = FMath::Clamp(CurrentSanity + Amount, USanityComponent::MinSanity, USanityComponent::MaxSanity);
 
 	CheckThresholdCrossed(OldSanity, CurrentSanity);
 }
