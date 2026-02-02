@@ -58,7 +58,7 @@ private:
 	float ParanoidThreshold = 40.0f;
 
 	UPROPERTY(EditAnywhere)
-	float BreakingThreshold = 20.0f;
+	float InsaneThreshold = 20.0f;
 
 	// Internal Functions
 	void ApplyPassiveDecay(const float DeltaTime);

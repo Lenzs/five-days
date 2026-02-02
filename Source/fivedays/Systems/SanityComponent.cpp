@@ -39,7 +39,7 @@ ESanityState USanityComponent::CalculateState(const float SanityValue) const
 		return ESanityState::Normal;
 	if (SanityValue > ParanoidThreshold)
 		return ESanityState::Uneasy;
-	if (SanityValue > BreakingThreshold)
+	if (SanityValue > InsaneThreshold)
 		return ESanityState::Paranoid;
 	return ESanityState::Insane;
 }
