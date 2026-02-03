@@ -5,6 +5,11 @@
 void UDinoGameWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	Super::NativeConstruct();
+    UE_LOG(LogTemp, Warning, TEXT("DinoGame: NativeConstruct Called!"));
+    
+    if (DinoImage) UE_LOG(LogTemp, Warning, TEXT("DinoGame: DinoImage Found!"));
+    // else UE_LOG(LogTemp, Error, TEXT("DinoGame: DinoImage MISSING!"));
 
 	// Initialize Tweakable Values
 	Gravity = 2500.0f;
@@ -41,6 +46,14 @@ void UDinoGameWidget::NativeConstruct()
 void UDinoGameWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	if (APlayerController* PC = GetOwningPlayer())
+    {
+        if (PC->WasInputKeyJustPressed(EKeys::SpaceBar))
+        {
+            TriggerJump();
+        }
+    }
 
 	if (!bIsPlaying || bIsGameOver)
 	{
