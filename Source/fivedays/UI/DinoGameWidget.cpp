@@ -4,191 +4,148 @@
 
 void UDinoGameWidget::NativeConstruct()
 {
-	Super::NativeConstruct();
-	Super::NativeConstruct();
-    UE_LOG(LogTemp, Warning, TEXT("DinoGame: NativeConstruct Called!"));
-    
-    if (DinoImage) UE_LOG(LogTemp, Warning, TEXT("DinoGame: DinoImage Found!"));
-    // else UE_LOG(LogTemp, Error, TEXT("DinoGame: DinoImage MISSING!"));
+    Super::NativeConstruct();
 
-	// Initialize Tweakable Values
-	Gravity = 2500.0f;
-	JumpForce = 1200.0f;
-	ObstacleSpeed = 500.0f;
-	
-	// Determine Ground Level based on where the Dino is placed in the Designer.
-	if (DinoImage)
-	{
-		// We cast the Slot to UCanvasPanelSlot because we assume the parent is a CanvasPanel.
-		if (UCanvasPanelSlot* DinoSlot = Cast<UCanvasPanelSlot>(DinoImage->Slot))
-		{
-			GroundYPos = DinoSlot->GetPosition().Y;
-			DinoYPos = GroundYPos;
-		}
-	}
+    // Default Configuration
+    Gravity = 2000.0f;
+    JumpForce = -900.0f; // Negative because Y=0 is top in UI
+    GroundY = 0.0f;      // Will be set dynamically
+    ObstacleSpeed = 600.0f;
+    bIsGameActive = false;
 
-	// Setup Obstacle Initial Positions
-	if (ObstacleImage)
-	{
-		if (UCanvasPanelSlot* ObstacleSlot = Cast<UCanvasPanelSlot>(ObstacleImage->Slot))
-		{
-			// Start off-screen to the right (approx 800-1000 units depending on screen size)
-			// We can use the current position if the user placed it far right, or force it.
-			ObstacleStartX = 1000.0f; 
-			ObstacleResetX = -100.0f; // Off-screen to the left
-			ObstacleXPos = ObstacleStartX;
-		}
-	}
+    if (GameOverText) GameOverText->SetVisibility(ESlateVisibility::Hidden);
 
-	StartGame();
-}
-
-void UDinoGameWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-
-	if (APlayerController* PC = GetOwningPlayer())
+    // Capture the initial ground position from the designer view
+    if (DinoImage)
     {
-        if (PC->WasInputKeyJustPressed(EKeys::SpaceBar))
+        UCanvasPanelSlot* DinoSlot = Cast<UCanvasPanelSlot>(DinoImage->Slot);
+        if (DinoSlot)
         {
-            TriggerJump();
+            GroundY = DinoSlot->GetPosition().Y;
+            CurrentDinoY = GroundY;
         }
     }
-
-	if (!bIsPlaying || bIsGameOver)
-	{
-		return;
-	}
-
-	// --- 1. JUMP PHYSICS ---
-	// Apply Gravity
-	VerticalVelocity -= Gravity * InDeltaTime;
-	DinoYPos -= VerticalVelocity * InDeltaTime;
-
-	// Floor Check
-	if (DinoYPos >= GroundYPos)
-	{
-		DinoYPos = GroundYPos;
-		VerticalVelocity = 0.0f;
-	}
-
-	UpdateDinoPosition();
-
-	// --- 2. OBSTACLE MOVEMENT ---
-	UpdateObstaclePosition(InDeltaTime);
-
-	// --- 3. SCORING ---
-	CurrentScore += InDeltaTime * 10.0f;
-	if (ScoreText)
-	{
-		ScoreText->SetText(FText::AsNumber((int32)CurrentScore));
-	}
-
-	// --- 4. COLLISION ---
-	if (CheckCollision())
-	{
-		bIsGameOver = true;
-		
-		if (ScoreText)
-		{
-			ScoreText->SetText(FText::FromString("GAME OVER"));
-		}
-		
-		// Optional: Log to console
-		UE_LOG(LogTemp, Warning, TEXT("Dino Hit Obstacle!"));
-	}
-}
-
-void UDinoGameWidget::TriggerJump()
-{
-	if (bIsGameOver)
-	{
-		StartGame();
-		return;
-	}
-
-	// Allow jump only if we are effectively on the ground
-	// Tolerance of 5.0 units handles floating point imprecision
-	if (FMath::IsNearlyEqual(DinoYPos, GroundYPos, 5.0f))
-	{
-		VerticalVelocity = JumpForce;
-	}
 }
 
 void UDinoGameWidget::StartGame()
 {
-	bIsPlaying = true;
-	bIsGameOver = false;
-	VerticalVelocity = 0.0f;
-	CurrentScore = 0.0f;
-
-	// Reset positions
-	DinoYPos = GroundYPos;
-	ObstacleXPos = ObstacleStartX;
-
-	UpdateDinoPosition();
-	
-	// Force obstacle update to move it to start immediately
-	UpdateObstaclePosition(0.0f);
+    bIsGameActive = true;
+    Score = 0.0f;
+    VerticalVelocity = 0.0f;
+    ObstacleX = 1000.0f; // Start off-screen right
+    
+    if (GameOverText) GameOverText->SetVisibility(ESlateVisibility::Hidden);
+    if (DinoImage) DinoImage->SetRenderOpacity(1.0f);
 }
 
-void UDinoGameWidget::UpdateDinoPosition()
+void UDinoGameWidget::TriggerJump()
 {
-	if (DinoImage)
-	{
-		if (UCanvasPanelSlot* DinoSlot = Cast<UCanvasPanelSlot>(DinoImage->Slot))
-		{
-			FVector2D CurrentPos = DinoSlot->GetPosition();
-			// Keep X the same, update Y
-			DinoSlot->SetPosition(FVector2D(CurrentPos.X, DinoYPos));
-		}
-	}
+    if (!bIsGameActive) 
+    {
+        StartGame();
+        return;
+    }
+
+    // Only jump if on the ground (simple check)
+    if (FMath::IsNearlyEqual(CurrentDinoY, GroundY, 5.0f))
+    {
+        VerticalVelocity = JumpForce;
+    }
 }
 
-void UDinoGameWidget::UpdateObstaclePosition(float DeltaTime)
+void UDinoGameWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
-	if (ObstacleImage)
-	{
-		ObstacleXPos -= ObstacleSpeed * DeltaTime;
+    Super::NativeTick(MyGeometry, InDeltaTime);
 
-		// Loop obstacle if it goes off screen
-		if (ObstacleXPos < ObstacleResetX)
-		{
-			ObstacleXPos = ObstacleStartX;
-			// Increase difficulty?
-			ObstacleSpeed += 10.0f; 
-		}
+    if (!bIsGameActive) return;
 
-		if (UCanvasPanelSlot* ObstacleSlot = Cast<UCanvasPanelSlot>(ObstacleImage->Slot))
-		{
-			FVector2D CurrentPos = ObstacleSlot->GetPosition();
-			ObstacleSlot->SetPosition(FVector2D(ObstacleXPos, CurrentPos.Y));
-		}
-	}
+    HandlePhysics(InDeltaTime);
+    HandleObstacle(InDeltaTime);
+
+    // Update Score
+    Score += InDeltaTime * 10.0f;
+    if (ScoreText) ScoreText->SetText(FText::AsNumber(FMath::FloorToInt(Score)));
+
+    if (CheckCollision())
+    {
+        bIsGameActive = false;
+        if (GameOverText) GameOverText->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
+void UDinoGameWidget::HandlePhysics(float DeltaTime)
+{
+    if (!DinoImage) return;
+
+    UCanvasPanelSlot* DinoSlot = Cast<UCanvasPanelSlot>(DinoImage->Slot);
+    if (DinoSlot)
+    {
+        // Apply Gravity
+        VerticalVelocity += Gravity * DeltaTime;
+        CurrentDinoY += VerticalVelocity * DeltaTime;
+
+        // Floor Clamp
+        if (CurrentDinoY >= GroundY)
+        {
+            CurrentDinoY = GroundY;
+            VerticalVelocity = 0.0f;
+        }
+
+        DinoSlot->SetPosition(FVector2D(DinoSlot->GetPosition().X, CurrentDinoY));
+    }
+}
+
+void UDinoGameWidget::HandleObstacle(float DeltaTime)
+{
+    if (!ObstacleImage) return;
+
+    UCanvasPanelSlot* ObsSlot = Cast<UCanvasPanelSlot>(ObstacleImage->Slot);
+    if (ObsSlot)
+    {
+        ObstacleX -= ObstacleSpeed * DeltaTime;
+
+        // Reset Obstacle if it goes off screen left
+        // Use local geometry to find screen width for respawn
+        float ScreenWidth = GetTickSpaceGeometry().GetLocalSize().X;
+        
+        if (ObstacleX < -100.0f)
+        {
+            ObstacleX = ScreenWidth + 50.0f; // Reset just off the right edge
+            ObstacleSpeed += 20.0f; // Make it harder over time
+        }
+
+        ObsSlot->SetPosition(FVector2D(ObstacleX, ObsSlot->GetPosition().Y));
+    }
 }
 
 bool UDinoGameWidget::CheckCollision()
 {
-	if (!DinoImage || !ObstacleImage) return false;
+    if (!DinoImage || !ObstacleImage) return false;
 
-	// Simple AABB (Axis-Aligned Bounding Box) Collision
-	// We use the Slot Position as the Top-Left corner and Size as dimensions.
-	
-	UCanvasPanelSlot* DinoSlot = Cast<UCanvasPanelSlot>(DinoImage->Slot);
-	UCanvasPanelSlot* ObSlot = Cast<UCanvasPanelSlot>(ObstacleImage->Slot);
+    FGeometry DinoGeom = DinoImage->GetTickSpaceGeometry();
+    FGeometry ObsGeom = ObstacleImage->GetTickSpaceGeometry();
 
-	if (!DinoSlot || !ObSlot) return false;
+    // Get absolute positions and sizes
+    FVector2D DinoPos = DinoGeom.GetAbsolutePosition();
+    FVector2D DinoSize = DinoGeom.GetAbsoluteSize();
 
-	FVector2D DinoPos = DinoSlot->GetPosition();
-	FVector2D DinoSize = DinoSlot->GetSize();
+    FVector2D ObsPos = ObsGeom.GetAbsolutePosition();
+    FVector2D ObsSize = ObsGeom.GetAbsoluteSize();
 
-	FVector2D ObPos = ObSlot->GetPosition();
-	FVector2D ObSize = ObSlot->GetSize();
+    // Hitbox Shrink: Make the collision box 80% of the visual size
+    // to account for transparent pixels in images
+    float ShrinkFactor = 0.8f;
+    
+    FVector2D DinoHitboxSize = DinoSize * ShrinkFactor;
+    FVector2D DinoOffset = (DinoSize - DinoHitboxSize) * 0.5f;
+    FVector2D DinoHitboxPos = DinoPos + DinoOffset;
 
-	// Create Box representations
-	FBox2D DinoBox(DinoPos, DinoPos + DinoSize);
-	FBox2D ObBox(ObPos, ObPos + ObSize);
+    FVector2D ObsHitboxSize = ObsSize * ShrinkFactor;
+    FVector2D ObsOffset = (ObsSize - ObsHitboxSize) * 0.5f;
+    FVector2D ObsHitboxPos = ObsPos + ObsOffset;
 
-	// Returns true if boxes overlap
-	return DinoBox.Intersect(ObBox);
+    bool bOverlapX = (DinoHitboxPos.X < ObsHitboxPos.X + ObsHitboxSize.X) && (DinoHitboxPos.X + DinoHitboxSize.X > ObsHitboxPos.X);
+    bool bOverlapY = (DinoHitboxPos.Y < ObsHitboxPos.Y + ObsHitboxSize.Y) && (DinoHitboxPos.Y + DinoHitboxSize.Y > ObsHitboxPos.Y);
+
+    return bOverlapX && bOverlapY;
 }
